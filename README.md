@@ -27,10 +27,8 @@ The card automatically reads the currently playing track’s title, artist, albu
 
 ## Screenshots
 
-_Add screenshots or a short GIF here once available._
-
 ```text
-[ Insert screenshot of the card here ]
+(https://github.com/wayj84/synced-lyrics-card/blob/main/Screenshot1.png)
 ```
 
 ---
