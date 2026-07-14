@@ -29,8 +29,8 @@ The card automatically reads the currently playing track’s title, artist, albu
 
 
 ![Screenshot of Synced Lyrics Card](https://github.com/wayj84/synced-lyrics-card/blob/main/Screenshot1.png)
-
-
+![Screenshot of Synced Lyrics Card](https://github.com/wayj84/synced-lyrics-card/blob/main/Screenshot2.png)
+![Screenshot of Synced Lyrics Card](https://github.com/wayj84/synced-lyrics-card/blob/main/Screenshot3.png)
 ---
 
 ## Installation
