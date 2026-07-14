@@ -1,0 +1,7 @@
+{
+  "name": "Synced Lyrics Card",
+  "content_in_root": true,
+  "render_readme": true,
+  "filename": "synced-lyrics-card.js",
+  "homeassistant": "2025.1.0"
+}
