@@ -1,7 +1,7 @@
 /* Synced Lyrics Card v1.0.0 - Home Assistant Lovelace custom card */
 class SyncedLyricsCard extends HTMLElement {
   static getConfigElement() { return document.createElement('synced-lyrics-card-editor'); }
-  static getStubConfig() { return { entity: '', layout: 'focus', alignment: 'center', font_family: 'system-ui', font_size: 42, font_weight: 700, card_height: '560px', show_previous: true, show_upcoming: true, inactive_opacity: 0.32, active_scale: 1.16, sync_offset: 0, show_track_info: true, background_opacity: 1, background_mode: 'theme', artwork_blur: 12, artwork_opacity: 1, artwork_overlay_opacity: 0.35, text_color_mode: 'auto', show_sync_slider: true, contrast_mode: 'adaptive', backdrop_blur: 8, backdrop_opacity: 0.18, text_shadow: true, text_shadow_strength: 0.75, track_info_font_size: 13, header_font_size: null, header_alignment: 'inherit', header_layout: 'combined' }; }
+  static getStubConfig() { return { entity: '', layout: 'focus', alignment: 'center', font_family: 'system-ui', font_size: 42, font_weight: 700, card_height: '560px', show_previous: true, show_upcoming: true, inactive_opacity: 0.32, active_scale: 1.16, sync_offset: 0, show_track_info: true, background_opacity: 1, background_mode: 'theme', artwork_blur: 12, artwork_opacity: 1, artwork_overlay_opacity: 0.35, text_color_mode: 'auto', show_sync_slider: true, contrast_mode: 'adaptive', backdrop_blur: 8, backdrop_opacity: 0.18, text_shadow: true, text_shadow_strength: 0.75, track_info_font_size: 13, header_font_size: null, header_alignment: 'inherit', header_layout: 'combined', plain_lyrics_auto_scroll: true }; }
   static get properties() { return {}; }
 
   constructor() {
@@ -116,7 +116,7 @@ class SyncedLyricsCard extends HTMLElement {
     return pos + this._offset();
   }
   _activeIndex(pos) { let found = -1; for (let i=0;i<this._lyrics.length;i++) { if (this._lyrics[i].time <= pos) found=i; else break; } return found; }
-  _tick() { this._paint(); this._raf = requestAnimationFrame(() => this._tick()); }
+  _tick() { this._paint(); this._paintPlainLyrics(); this._raf = requestAnimationFrame(() => this._tick()); }
   _render() {
     if (!this._config) return;
     const c = this._config, s = this._state(), track = this._trackFromState(s);
@@ -135,6 +135,15 @@ class SyncedLyricsCard extends HTMLElement {
     slider?.addEventListener('input', (event) => { this._setOffset(event.target.value); this._showSyncControl(); });
     this.shadowRoot.querySelector('#sync-reset')?.addEventListener('click', () => { this._setOffset(0); this._showSyncControl(); });
     this.shadowRoot.querySelector('ha-card')?.addEventListener('click', (event) => { if (!event.target.closest('.sync-control')) this._showSyncControl(); });
+  }
+  _paintPlainLyrics() {
+    if (!this._plainLyrics || !this._config?.plain_lyrics_auto_scroll || !this.shadowRoot) return;
+    const plain = this.shadowRoot.querySelector('.plain');
+    const state = this._state(); const duration = Number(state?.attributes?.media_duration) || 0;
+    if (!plain || !duration || state?.state !== 'playing') return;
+    const maxScroll = Math.max(0, plain.scrollHeight - plain.clientHeight);
+    // Map the player's real elapsed position across the whole scrollable lyric sheet.
+    plain.scrollTop = Math.max(0, Math.min(maxScroll, (this._position() / duration) * maxScroll));
   }
   _paint() {
     if (!this._lyrics.length || !this.shadowRoot) return;
@@ -179,6 +188,7 @@ class SyncedLyricsCardEditor extends HTMLElement {
         {name:'font_weight', selector:{number:{min:100,max:900,step:100,mode:'box'}}},
         {name:'inactive_opacity', selector:{number:{min:0,max:1,step:0.05,mode:'box'}}},
         {name:'active_scale', selector:{number:{min:1,max:2,step:0.01,mode:'box'}}},
+        {name:'plain_lyrics_auto_scroll', selector:{boolean:{}}},
       ]],
       ['Track header', [
         {name:'header_font_size', selector:{number:{min:8,max:48,step:1,mode:'box',unit_of_measurement:'px'}}},
@@ -207,7 +217,7 @@ class SyncedLyricsCardEditor extends HTMLElement {
   setConfig(config) { this._config = {...SyncedLyricsCard.getStubConfig(), ...config}; this._build(); this._sync(); }
   set hass(hass) { this._hass = hass; this._build(); this._sync(); }
   _label(name) {
-    return ({entity:'Media player',layout:'Layout',card_height:'Card height (for example 560px)',show_track_info:'Show track title and artist',alignment:'Lyrics alignment',font_family:'Lyrics font',font_size:'Lyrics font size',font_weight:'Lyrics font weight',inactive_opacity:'Inactive lyric opacity',active_scale:'Active lyric scale',header_font_size:'Header font size',header_alignment:'Header alignment',header_layout:'Header layout',background_mode:'Background source',background_opacity:'Theme background opacity',artwork_blur:'Album artwork blur',artwork_opacity:'Album artwork opacity',artwork_overlay_opacity:'Album artwork dark overlay',text_color_mode:'Lyric colour',contrast_mode:'Adaptive contrast',backdrop_blur:'Contrast blur',backdrop_opacity:'Contrast overlay opacity',text_shadow:'Text drop shadows',text_shadow_strength:'Text shadow strength',show_sync_slider:'Show on-card sync slider',sync_offset:'Starting sync offset'})[name] || name;
+    return ({entity:'Media player',layout:'Layout',card_height:'Card height (for example 560px)',show_track_info:'Show track title and artist',alignment:'Lyrics alignment',font_family:'Lyrics font',font_size:'Lyrics font size',font_weight:'Lyrics font weight',inactive_opacity:'Inactive lyric opacity',active_scale:'Active lyric scale',plain_lyrics_auto_scroll:'Auto-scroll plain lyrics to song duration',header_font_size:'Header font size',header_alignment:'Header alignment',header_layout:'Header layout',background_mode:'Background source',background_opacity:'Theme background opacity',artwork_blur:'Album artwork blur',artwork_opacity:'Album artwork opacity',artwork_overlay_opacity:'Album artwork dark overlay',text_color_mode:'Lyric colour',contrast_mode:'Adaptive contrast',backdrop_blur:'Contrast blur',backdrop_opacity:'Contrast overlay opacity',text_shadow:'Text drop shadows',text_shadow_strength:'Text shadow strength',show_sync_slider:'Show on-card sync slider',sync_offset:'Starting sync offset'})[name] || name;
   }
   _build() {
     if (this._forms.length) return;
