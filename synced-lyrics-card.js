@@ -145,7 +145,12 @@ class SyncedLyricsCard extends HTMLElement {
       const viewport = this.shadowRoot.querySelector('.viewport');
       // The lyric sheet is absolutely positioned at the viewport top, so this is
       // a stable coordinate: each line moves only by its own line-height.
-      this._translateY = Math.round(viewport.clientHeight / 2 - active.offsetTop - active.offsetHeight / 2);
+      // Centre the active line in the complete card, not merely the remaining
+      // viewport below the optional track-information header.
+      const card = this.shadowRoot.querySelector('ha-card');
+      const cardCentre = (card?.clientHeight || viewport.clientHeight) / 2;
+      const viewportTop = viewport.offsetTop;
+      this._translateY = Math.round(cardCentre - viewportTop - active.offsetTop - active.offsetHeight / 2);
       root.style.transform = `translateY(${this._translateY}px)`;
     }
   }
