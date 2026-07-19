@@ -293,3 +293,53 @@ customElements.define('synced-lyrics-card', SyncedLyricsCard);
 customElements.define('synced-lyrics-card-editor', SyncedLyricsCardEditor);
 window.customCards = window.customCards || [];
 window.customCards.push({type:'synced-lyrics-card', name:'Synced Lyrics Card', description:'Synchronized LRCLIB lyrics for a media player.', preview:true, documentationURL:'https://lrclib.net/docs'});
+
+class SongInfoCard extends HTMLElement {
+  static getStubConfig() { return {entity:'', card_height:'auto', show_bio:true, show_annotation:true, cache_hours:24}; }
+  setConfig(config) { if (!config?.entity) throw new Error('Set a media_player entity'); this._config={...SongInfoCard.getStubConfig(),...config}; this._key=''; this._data=null; this._render(); }
+  set hass(hass) { this._hass=hass; this._update(); }
+  getCardSize() { return 4; }
+  _state() { return this._hass?.states?.[this._config?.entity]; }
+  async _wait() { const last=window.__songInfoMbLast||0, delay=Math.max(0,1100-(Date.now()-last)); if(delay) await new Promise(r=>setTimeout(r,delay)); window.__songInfoMbLast=Date.now(); }
+  async _get(url) { await this._wait(); const r=await fetch(url,{headers:{Accept:'application/json'}}); if(!r.ok) throw new Error(`MusicBrainz returned ${r.status}`); return r.json(); }
+  _update() {
+    const a=this._state()?.attributes||{}, title=a.media_title||'', artist=a.media_artist||'';
+    const key=`${artist}|${title}|${a.media_duration||''}`; if(!title||!artist||key===this._key)return;
+    this._key=key; this._data=null; this._render(); this._load(title,artist,Number(a.media_duration)||0,key);
+  }
+  async _load(title,artist,duration,key) {
+    try {
+      const q=`recording:"${title.replace(/"/g,'')}" AND artist:"${artist.replace(/"/g,'')}"`;
+      const search=await this._get(`https://musicbrainz.org/ws/2/recording?query=${encodeURIComponent(q)}&fmt=json&limit=5`);
+      let recording=(search.recordings||[]).sort((x,y)=>(y.score||0)-(x.score||0))[0];
+      if(!recording || key!==this._key) throw new Error('No matching MusicBrainz recording found');
+      const credited=(recording['artist-credit']||[]).map(x=>x.name||x.artist?.name).filter(Boolean).join(', ');
+      const artistId=recording['artist-credit']?.[0]?.artist?.id;
+      let artistInfo={};
+      if(artistId) artistInfo=await this._get(`https://musicbrainz.org/ws/2/artist/${artistId}?inc=tags+annotation+url-rels&fmt=json`);
+      if(key!==this._key)return;
+      const release=recording.releases?.[0];
+      this._data={title:recording.title, artist:credited||artist, mbid:recording.id, artistMbid:artistId, date:release?.date||recording['first-release-date'], album:release?.title, country:release?.country, genres:[...(recording.tags||[]),...(artistInfo.tags||[])].map(x=>x.name).filter((v,i,a)=>a.indexOf(v)===i).slice(0,6), annotation:artistInfo.annotation?.text||recording.annotation?.text||'', artistType:artistInfo.type||'', area:artistInfo.area?.name||'', life:artistInfo['life-span']||{}};
+      this._render();
+    } catch(e) { if(key===this._key) { this._data={error:e.message}; this._render(); } }
+  }
+  _esc(x) { const d=document.createElement('div');d.textContent=x??'';return d.innerHTML; }
+  _render() {
+    if(!this._config)return; if(!this.shadowRoot)this.attachShadow({mode:'open'});
+    const d=this._data, loading=!d, c=this._config;
+    const life=d?.life?.begin ? `${d.life.begin}${d.life.end?' – '+d.life.end:''}` : '';
+    const metadata=d&&!d.error?`<dl>${d.album?`<dt>Album</dt><dd>${this._esc(d.album)}</dd>`:''}${d.date?`<dt>First release</dt><dd>${this._esc(d.date)}</dd>`:''}${d.country?`<dt>Country</dt><dd>${this._esc(d.country)}</dd>`:''}${d.genres?.length?`<dt>Tags</dt><dd>${this._esc(d.genres.join(', '))}</dd>`:''}</dl>`:'';
+    const bio=d&&!d.error&&c.show_bio!==false?`<section><h3>Artist bio</h3><p>${this._esc([d.artistType,d.area,life].filter(Boolean).join(' · ')||'No structured artist biography is available from MusicBrainz for this artist.')}</p></section>`:'';
+    const note=d&&!d.error&&c.show_annotation!==false&&d.annotation?`<section><h3>MusicBrainz notes</h3><p class="annotation">${this._esc(d.annotation)}</p></section>`:'';
+    const link=d&&!d.error?`<a href="https://musicbrainz.org/recording/${encodeURIComponent(d.mbid)}" target="_blank" rel="noreferrer">Open in MusicBrainz ↗</a>`:'';
+    this.shadowRoot.innerHTML=`<style>:host{display:block}ha-card{min-height:${c.card_height==='auto'?'0':this._esc(c.card_height)};padding:18px;box-sizing:border-box}h2{font:600 21px/1.2 system-ui;margin:0 0 4px}h3{font:600 13px system-ui;margin:18px 0 5px;color:var(--secondary-text-color);text-transform:uppercase;letter-spacing:.04em}p,.artist,dd{font:400 14px/1.5 system-ui;margin:0}.artist{color:var(--secondary-text-color)}dl{display:grid;grid-template-columns:max-content 1fr;gap:5px 14px;margin:16px 0 0;font:14px/1.35 system-ui}dt{color:var(--secondary-text-color)}dd{margin:0}.annotation{white-space:pre-wrap}a{display:inline-block;margin-top:18px;color:var(--primary-color);font:500 14px system-ui;text-decoration:none}.loading,.error{font:14px/1.5 system-ui;color:var(--secondary-text-color)}.error{color:var(--error-color)}</style><ha-card>${loading?'<p class="loading">Looking up current track in MusicBrainz…</p>':d.error?`<p class="error">${this._esc(d.error)}</p>`:`<h2>${this._esc(d.title)}</h2><p class="artist">${this._esc(d.artist)}</p>${metadata}${bio}${note}${link}`}</ha-card>`;
+  }
+}
+class SongInfoCardEditor extends HTMLElement {
+ setConfig(c){this._config={...SongInfoCard.getStubConfig(),...c};this._render()} set hass(h){this._hass=h;this._render()}
+ _render(){if(!this._config||!this._hass)return;this.innerHTML='';const f=document.createElement('ha-form');f.hass=this._hass;f.data=this._config;f.schema=[{name:'entity',selector:{entity:{domain:'media_player'}}},{name:'show_bio',selector:{boolean:{}}},{name:'show_annotation',selector:{boolean:{}}},{name:'card_height',selector:{text:{}}}];f.computeLabel=i=>({entity:'Media player',show_bio:'Show artist bio summary',show_annotation:'Show MusicBrainz notes',card_height:'Card height (or auto)'})[i.name];f.addEventListener('value-changed',e=>this.dispatchEvent(new CustomEvent('config-changed',{detail:{config:{...this._config,...e.detail.value}},bubbles:true,composed:true})));this.append(f)}
+}
+SongInfoCard.getConfigElement=()=>document.createElement('song-info-card-editor');
+customElements.define('song-info-card',SongInfoCard);
+customElements.define('song-info-card-editor',SongInfoCardEditor);
+window.customCards.push({type:'song-info-card',name:'Song Info Card',description:'Current-track metadata and artist details from MusicBrainz.',preview:true,documentationURL:'https://musicbrainz.org/doc/MusicBrainz_API'});
